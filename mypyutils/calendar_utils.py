@@ -211,3 +211,25 @@ def mon_to_JJAS(ds):
     ds_seas = ds_seas.sel(L=Lkeep)
     return ds_seas
 
+def time_year_plus_frac(ds, time_name):
+    """return time variable, as numpy array of year plus fraction of year values"""
+
+    # this is straightforward if time has units='days since 0000-01-01' and calendar='noleap'
+    # so convert specification of time to that representation
+
+    # get time values as an np.ndarray of cftime objects
+    if np.dtype(ds[time_name]) == np.dtype("O"):
+        tvals_cftime = ds[time_name].values
+    else:
+        tvals_cftime = cftime.num2date(
+            ds[time_name].values,
+            ds[time_name].attrs["units"],
+            ds[time_name].attrs["calendar"],
+        )
+
+    # convert cftime objects to representation mentioned above
+    tvals_days = cftime.date2num(
+        tvals_cftime, "days since 0000-01-01", calendar="noleap"
+    )
+
+    return tvals_days / 365.0

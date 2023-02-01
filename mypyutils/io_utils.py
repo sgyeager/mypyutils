@@ -56,12 +56,11 @@ def nested_file_list_by_year(filetemplate,filetype,ens,field,firstyear,lastyear,
             ix[i] = 0
     return files,yrs[ix==1]
 
-
-def get_monthly_data(filetemplate,filetype,ens,nlead,field,firstyear,lastyear,stmon,preproc,chunks={}):
+def get_monthly_data(filetemplate,filetype,ens,nlead,field,startyears,stmon,preproc,chunks={}):
     """ returns a dask array containing the requested hindcast ensemble
     """
 
-    file_list,yrs = nested_file_list_by_year(filetemplate,filetype,ens,field,firstyear,lastyear,stmon)
+    file_list,yrs = nested_file_list_by_year(filetemplate,filetype,ens,field,startyears,stmon)
 
     ds0 = xr.open_mfdataset(
     file_list,
@@ -75,12 +74,11 @@ def get_monthly_data(filetemplate,filetype,ens,nlead,field,firstyear,lastyear,st
     coords="minimal",
     compat="override",
     preprocess=partial(preproc,nlead=nlead,field=field),chunks=chunks)
-    
+
     # assign final attributes
-    ds0["Y"] = yrs
+    ds0["Y"] = startyears
     ds0["M"] = np.arange(ds0.sizes["M"]) + 1
-    
+
     # reorder into desired format (Y,L,M,...)
     ds0 = ds0.transpose("Y","L","M",...)
     return ds0
-
