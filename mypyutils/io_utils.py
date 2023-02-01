@@ -27,15 +27,13 @@ def file_dict(filetempl,filetype,mem,stmon):
         
     return filepaths
 
-
-def nested_file_list_by_year(filetemplate,filetype,ens,field,firstyear,lastyear,stmon):
+def nested_file_list_by_year(filetemplate,filetype,ens,field,startyears,stmon):
     """ retrieves a nested list of files for these start years and ensemble members
     """
     ens = np.array(range(ens))+1
-    yrs = np.arange(firstyear,lastyear+1)
+    yrs = startyears
     files = []    # a list of lists, dim0=start_year, dim1=ens
-    ix = np.zeros(yrs.shape)+1
-    
+    filecount = []
     for yy,i in zip(yrs,range(len(yrs))):
         ffs = []  # a list of files for this yy
         file0 = ''
@@ -48,13 +46,14 @@ def nested_file_list_by_year(filetemplate,filetype,ens,field,firstyear,lastyear,
                 if file != file0:
                     ffs.append(file)
                     file0 = file
-        
+
         #append this ensemble member to files
         if ffs:  #only append if you found files
             files.append(ffs)
+            filecount.append(1)
         else:
-            ix[i] = 0
-    return files,yrs[ix==1]
+            filecount.append(0)
+    return files,yrs[filecount!=0]
 
 def get_monthly_data(filetemplate,filetype,ens,nlead,field,startyears,stmon,preproc,chunks={}):
     """ returns a dask array containing the requested hindcast ensemble
