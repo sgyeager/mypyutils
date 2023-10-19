@@ -93,11 +93,36 @@ def time_set_midmonth(ds, time_name, deep=False):
     nmonths = len(month)
     newtime = [cftime.DatetimeNoLeap(year[i], month[i], 15) for i in range(nmonths)]
     ds[time_name] = newtime
+    return ds
 
+def time_set_midday(ds, time_name, deep=False):
+    """
+    Return copy of ds with values of ds[time_name] replaced with mid-day
+    values (hour=12) rather than end-day values.
+    
+    Author: S. Yeager
+    """
+    year = ds[time_name].dt.year
+    month = ds[time_name].dt.month
+    day = ds[time_name].dt.day
+    nt = len(month)
+    newtime = [cftime.DatetimeNoLeap(year[i], month[i], day[i],12,0,0) for i in range(nt-1)]
+    newtime.insert(0,cftime.DatetimeNoLeap(year[0], month[0], day[0]-1,12,0,0))
+    ds[time_name] = newtime
+    return ds
+
+def cftime_add_yearoffset(ds, time_name, yoff):
+    year = ds[time_name].dt.year
+    month = ds[time_name].dt.month
+    year = xr.where(month==1,year-1,year)
+    month = xr.where(month==1,12,month-1)
+    nmonths = len(month)
+    newtime = [cftime.DatetimeNoLeap(year[i], month[i], 15) for i in range(nmonths)]
+    ds[time_name] = newtime
     return ds
 
 
-def mon_to_seas(da):
+def mon_to_seas_old(da):
     """ Converts an Xarray DataArray containing monthly data to one containing 
     seasonal-average data, appropriately weighted with days_in_month. Time coordinate
     of output reflects (approximate) centered time value for DJF, MAM, JJA, SON
@@ -109,6 +134,15 @@ def mon_to_seas(da):
     result = ((da * month_length).resample(time='QS-DEC',loffset='45D').sum(skipna=True,min_count=3) /
           month_length.resample(time='QS-DEC',loffset='45D').sum())
     return result
+
+def mon_to_seas(ds):
+    # do a simple 3-month rolling mean along L-dimension
+    ds_seas = ds.rolling(time=3,min_periods=3, center=True).mean()
+    # subselect seasons:  DJF, MAM, JJA, SON
+    mon = ds_seas.time.dt.month.values
+    timekeep = ((mon == 1) | (mon == 4) | (mon == 7) | (mon == 10))
+    ds_seas = ds_seas.isel(time=timekeep)
+    return ds_seas
 
 def mon_to_seas_dask(ds):
     """ Converts a Dask DataSet containing monthly data to one containing 

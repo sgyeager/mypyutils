@@ -37,13 +37,40 @@ def remap_camse(ds, dsw, varlst=[]):
     return dso
 
 def add_grid_bounds(ds):
-    ds = ds.cf.add_bounds(['lon','lat'])
-    # Check latitude range
-    lb = ds['lat_bounds']
-    if ((lb<-90) | (lb>90)).any():
+    saveattrs = ds['lon'].attrs
+    ds['lon'] = xr.where(ds['lon']<0,ds['lon']+360,ds['lon'])
+    ds['lon'] = ds['lon'].assign_attrs(saveattrs).load()
+    ds = ds.cf.add_bounds(['lon','lat']).rename({'lat_bounds':'lat_b','lon_bounds':'lon_b'})
+    #  range fix
+    latb = ds['lat_b']
+    if ((latb<-90) | (latb>90)).any():
         saveattrs = ds['lat'].attrs
-        lb = xr.where(lb>90,90,lb)
-        lb = xr.where(lb<-90,-90,lb)
-        ds['lat_bounds'] = lb
-        ds['lat'] = ds['lat'].assign_attrs(saveattrs)
+        latb = xr.where(latb>90,90,latb)
+        latb = xr.where(latb<-90,-90,latb)
+        ds['lat_b'] = latb
+        ds['lat'] = ds['lat'].assign_attrs(saveattrs).load()
+    lonb = ds['lon_b']
+    if ((lonb<0) | (lonb>360)).any():
+        lonb = xr.where(lonb<0,lonb+360,lonb)
+        lonb = xr.where(lonb>360,lonb-360,lonb)
+        ds['lon_b'] = lonb
+    return ds
+
+def add_grid_bounds_POP(ds):
+    lon = ds.lon; lat = ds.lat
+    lonb = ds.lon_b; latb = ds.lat_b
+    dim1 = lonb.dims[0]; dim2 = lonb.dims[1]
+    lonb2 = xr.concat([lonb.isel({dim1:0}),lonb],dim=dim1)
+    lonb2 = xr.concat([lonb2.isel({dim2:-1}),lonb2],dim=dim2)
+    lonb2 = lonb2.rename({dim1:dim1+'_b',dim2:dim2+'_b'})
+    tmp = latb.isel({dim1:0}) - (latb.isel({dim1:1}) - latb.isel({dim1:0}))
+    latb2 = xr.concat([tmp,latb],dim=dim1)
+    latb2 = xr.concat([latb2.isel({dim2:-1}),latb2],dim=dim2)
+    latb2 = latb2.rename({dim1:dim1+'_b',dim2:dim2+'_b'})
+    ds = ds.drop(['lon','lat','lon_b','lat_b'])
+    lon = lon.drop(['lon','lat','lon_b','lat_b'])
+    lat = lat.drop(['lon','lat','lon_b','lat_b'])
+    lonb2 = lonb2.drop(['lon','lat','lon_b','lat_b'])
+    latb2 = latb2.drop(['lon','lat','lon_b','lat_b'])
+    ds = ds.assign_coords({'lon':lon,'lat':lat,'lon_b':lonb2,'lat_b':latb2})
     return ds

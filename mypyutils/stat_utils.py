@@ -148,6 +148,48 @@ def leadtime_skill_seas(mod_da,mod_time,obs_da,detrend=False):
     rpc = xr.concat(rpc_list,leadtime)
     return xr.Dataset({'corr':corr,'pval':pval,'nrmse':rmse,'msss':msss,'rpc':rpc})
 
+def leadtime_skill_mon(mod_da,mod_time,obs_da,detrend=False):
+    """ 
+    Computes a suite of deterministic skill metrics given two DataArrays corresponding to model and observations, which 
+    must share the same lat/lon coordinates (if any). Assumes time coordinates are compatible
+    (can be aligned). Both DataArrays should represent monthly averages.
+    
+        Inputs
+        mod_da: a monthly-averaged hindcast DataArray dimensioned (Y,L,M,...)
+        mod_time: a hindcast time DataArray dimensioned (Y,L). NOTE: assumes mod_time.dt.month exists.
+        obs_da: an OBS DataArray dimensioned (time,...)
+    """
+    corr_list = []; pval_list = []; rmse_list = []; msss_list = []; rpc_list = []; pers_list = []
+    leadtime = mod_da.L 
+    for i in mod_da.L.values:
+        ens_ts = mod_da.sel(L=i)
+        ens_time = mod_time.sel(L=i)
+        ens_ts['Y'] = ens_time
+        ens_ts = ens_ts.rename({'Y':'time'}).chunk(dict(time=-1))
+        ens_time_mon = ens_time.dt.month.data[0]
+        monind = obs_da.time.dt.month==ens_time_mon; obs_ts = obs_da.isel(time=monind)
+        a,b = xr.align(ens_ts,obs_ts)
+        if detrend:
+            a = detrend_linear(a,'time')
+            b = detrend_linear(b,'time')
+        amean = a.mean('M')
+        sigobs = b.std('time')
+        sigsig = amean.std('time')
+        sigtot = a.std('time').mean('M')
+        r = xs.pearson_r(amean,b,dim='time')
+        rpc = r/(sigsig/sigtot)
+        corr_list.append(r)
+        rpc_list.append(rpc.where(r>0))
+        rmse_list.append(xs.rmse(amean,b,dim='time')/sigobs)
+        msss_list.append(1-(xs.mse(amean,b,dim='time')/b.var('time')))
+        pval_list.append(xs.pearson_r_eff_p_value(amean,b,dim='time'))
+    corr = xr.concat(corr_list,leadtime)
+    pval = xr.concat(pval_list,leadtime)
+    rmse = xr.concat(rmse_list,leadtime)
+    msss = xr.concat(msss_list,leadtime)
+    rpc = xr.concat(rpc_list,leadtime)
+    return xr.Dataset({'corr':corr,'pval':pval,'nrmse':rmse,'msss':msss,'rpc':rpc})
+
 def leadtime_skill_seas_resamp(mod_da,mod_time,obs_da,sampsize,N,detrend=False):
     """ 
     Same as leadtime_skill_seas(), but this version resamples the mod_da member dimension (M) to generate
@@ -204,6 +246,8 @@ def compute_skill_annual(mod_da,mod_time,obs_da,nyear=1,nleads=1,resamp=0,detren
     sigobs_list = []; sigsig_list = []; sigtot_list = []; s2t_list = []
     if (nyear>1):
         obs_ts = obs_da.rolling(time=nyear,min_periods=nyear, center=True).mean().dropna('time')
+    else:
+        obs_ts = obs_da
     lvals = np.arange(nyear)
     lvalsda = xr.DataArray(np.arange(nleads),dims="L",name="L")
     for i in range(nleads):
@@ -211,7 +255,7 @@ def compute_skill_annual(mod_da,mod_time,obs_da,nyear=1,nleads=1,resamp=0,detren
         ens_time_year = mod_time.isel(L=lvals+i).mean('L')
         ens_ts = ens_ts.assign_coords(time=("time",ens_time_year.data))
         a,b = xr.align(ens_ts,obs_ts)
-        b = b - b.mean('time')
+        #b = b - b.mean('time')
         if detrend:
                 a = detrend_linear(a,'time')
                 b = detrend_linear(b,'time')
@@ -221,14 +265,14 @@ def compute_skill_annual(mod_da,mod_time,obs_da,nyear=1,nleads=1,resamp=0,detren
         if (resamp>0):
             iterations = resamp
             ens_size = 1
-            a_resamp = xs.resample_iterations_idx(a, iterations, 'M', dim_max=ens_size).squeeze()
+            a_resamp = xs.resample_iterations(a, iterations, 'M', dim_max=ens_size).squeeze()
             sigtot = a_resamp.std('time').mean('iteration')
         else:
             sigtot = a.std('time').mean('M')
         r = xs.pearson_r(amean,b,dim='time')
-        rpc = r/(sigsig/sigtot)
+        rpc = xr.where(r>0,r,0)/(sigsig/sigtot)
         corr_list.append(r)
-        rpc_list.append(rpc.where(r>0))
+        rpc_list.append(rpc)
         rmse_list.append(xs.rmse(amean,b,dim='time')/sigobs)
         msss_list.append(1-(xs.mse(amean,b,dim='time')/b.var('time')))
         pval_list.append(xs.pearson_r_eff_p_value(amean,b,dim='time'))
@@ -255,6 +299,8 @@ def compute_resampskill_annual(mod_da,mod_time,obs_da,nyear=1,nleads=1,detrend=F
     dslist = []
     if (nyear>1):
         obs_ts = obs_da.rolling(time=nyear,min_periods=nyear, center=True).mean().dropna('time')
+    else:
+        obs_ts = obs_da
     lvals = np.arange(nyear)
     lvalsda = xr.DataArray(np.arange(nleads),dims="L",name="L")
     for l in mod_da.iteration.values:
@@ -280,9 +326,11 @@ def compute_resampskill_annual(mod_da,mod_time,obs_da,nyear=1,nleads=1,detrend=F
             else:
                 sigtot = a.std('time').mean('M')
             r = xs.pearson_r(amean,b,dim='time')
-            rpc = r/(sigsig/sigtot)
+            rpc = xr.where(r>0,r,0)/(sigsig/sigtot)
+            #rpc = r/(sigsig/sigtot)
             corr_list.append(r)
-            rpc_list.append(rpc.where(r>0))
+            #rpc_list.append(rpc.where(r>0))
+            rpc_list.append(rpc)
             rmse_list.append(xs.rmse(amean,b,dim='time')/sigobs)
             msss_list.append(1-(xs.mse(amean,b,dim='time')/b.var('time')))
             pval_list.append(xs.pearson_r_eff_p_value(amean,b,dim='time'))

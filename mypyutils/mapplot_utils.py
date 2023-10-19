@@ -7,6 +7,7 @@ from cartopy.util import add_cyclic_point
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 import matplotlib.ticker as mticker
 from matplotlib.colors import BoundaryNorm
+import matplotlib as mpl
 
 def contourmap_bothoceans_robinson_pos(fig, dat, lon, lat, ci, cmin, cmax, titlestr,
  x1, x2, y1, y2, labels=True, cmap="blue2red", fontsize=15, centrallon=0):
@@ -155,7 +156,7 @@ def adjust_pop_grid(tlon,tlat,field):
 def map_pcolor_global_subplot(fig, dat, lon, lat, ci, cmin, cmax, titlestr,
                               nrow,ncol,subplot, proj, labels=True, showland=True, 
                               grid="latlon", cmap="blue2red", facecolor="white",
-                              fontsize=15,centrallon=0,tricontour=False,cutoff=0.5):
+                              fontsize=15,centrallon=0,tricontour=False,cutoff=0.5,gridspec=False):
     """ plot a contour map of 2D data dat with coordinates lon and lat
         Input:
               fig = the figure identifier
@@ -174,6 +175,7 @@ def map_pcolor_global_subplot(fig, dat, lon, lat, ci, cmin, cmax, titlestr,
               showland = True/False (if False, fill over land)
               grid = ('latlon','camfv','camse','pop')
               cmap = color map (only set up for blue2red at the moment)
+              gridspec = True if using gridspec for subplotting
     """
 
     # set up contour levels and color map
@@ -182,8 +184,8 @@ def map_pcolor_global_subplot(fig, dat, lon, lat, ci, cmin, cmax, titlestr,
 
     if (cmap == "blue2red"):
         cmap = mycolors.blue2red_cmap(nlevs)
-        #mymap.set_over('pink')
-        #mymap.set_under('cyan')
+        #cmap.set_over('pink')
+        #cmap.set_under('cyan')
     elif (cmap == "precip"):
         cmap = mycolors.precip_cmap(nlevs)
     elif (cmap == "blue2red_acc"):
@@ -191,8 +193,11 @@ def map_pcolor_global_subplot(fig, dat, lon, lat, ci, cmin, cmax, titlestr,
     else:
         cmap = mpl.cm.get_cmap(cmap)
     
-    norm = BoundaryNorm(clevs, ncolors=cmap.N, clip=True)
-    ax = fig.add_subplot(nrow,ncol,subplot, projection=proj)
+    norm = BoundaryNorm(clevs, ncolors=cmap.N, clip=False)
+    if (gridspec):
+        ax = fig.add_subplot(subplot, projection=proj)
+    else:
+        ax = fig.add_subplot(nrow,ncol,subplot, projection=proj)
     ax.set_aspect('auto')
     ax.set_title(titlestr, fontsize=fontsize)
     ax.set_facecolor(facecolor)
@@ -203,7 +208,9 @@ def map_pcolor_global_subplot(fig, dat, lon, lat, ci, cmin, cmax, titlestr,
   
     if grid=="latlon" or grid=="camfv":
         dat, lon = add_cyclic_point(dat, coord=lon)
-        cntr = ax.pcolormesh(lon, lat, dat, shading='nearest',vmin=clevs.min(),vmax=clevs.max(),  cmap = cmap, norm=norm, rasterized=True, transform=ccrs.PlateCarree())
+        #cntr = ax.pcolormesh(lon, lat, dat, shading='nearest',vmin=clevs.min(),vmax=clevs.max(),  cmap = cmap, norm=norm, rasterized=True, transform=ccrs.PlateCarree())
+        cntr = ax.pcolormesh(lon, lat, dat, shading='nearest',
+                             cmap = cmap, norm=norm, rasterized=True, transform=ccrs.PlateCarree())
         
     elif grid=="camse":
         tri, z = get_refined_triang(lon,lat, dat)
@@ -211,7 +218,8 @@ def map_pcolor_global_subplot(fig, dat, lon, lat, ci, cmin, cmax, titlestr,
         
     elif grid=="pop":
         lon, lat, dat = adjust_pop_grid(lon, lat, dat)
-        cntr = ax.pcolormesh(lon, lat, dat, shading='nearest',vmin=clevs.min(),vmax=clevs.max(), cmap = cmap, norm=norm, rasterized=True, transform=ccrs.PlateCarree())
+        cntr = ax.pcolormesh(lon, lat, dat, shading='nearest', cmap = cmap, norm=norm, 
+                             rasterized=True, transform=ccrs.PlateCarree())
         
     else:
         raise ValueError('ERROR: unknown grid')
