@@ -245,20 +245,22 @@ def compute_skill_annual(mod_da,mod_time,obs_da,nyear=1,nleads=1,resamp=0,detren
     corr_list = []; pval_list = []; rmse_list = []; msss_list = []; rpc_list = []
     sigobs_list = []; sigsig_list = []; sigtot_list = []; s2t_list = []
     if (nyear>1):
-        obs_ts = obs_da.rolling(time=nyear,min_periods=nyear, center=True).mean().dropna('time')
+        obs_ts = obs_da.rolling(time=nyear,min_periods=nyear, center=True).mean().dropna('time',how='all')
     else:
         obs_ts = obs_da
     lvals = np.arange(nyear)
     lvalsda = xr.DataArray(np.arange(nleads),dims="L",name="L")
     for i in range(nleads):
-        ens_ts = mod_da.isel(L=lvals+i).mean('L').rename({'Y':'time'})
+        ens_ts = mod_da.isel(L=lvals+i).mean('L').rename({'Y':'time'}).chunk(dict(time=-1))
         ens_time_year = mod_time.isel(L=lvals+i).mean('L')
         ens_ts = ens_ts.assign_coords(time=("time",ens_time_year.data))
         a,b = xr.align(ens_ts,obs_ts)
-        #b = b - b.mean('time')
         if detrend:
-                a = detrend_linear(a,'time')
-                b = detrend_linear(b,'time')
+            a = detrend_linear(a,'time')
+            b = detrend_linear(b,'time')
+        else:
+            a = a - a.mean('time')
+            b = b - b.mean('time')
         amean = a.mean('M')
         sigobs = b.std('time')
         sigsig = amean.std('time')
@@ -298,7 +300,7 @@ def compute_resampskill_annual(mod_da,mod_time,obs_da,nyear=1,nleads=1,detrend=F
     """
     dslist = []
     if (nyear>1):
-        obs_ts = obs_da.rolling(time=nyear,min_periods=nyear, center=True).mean().dropna('time')
+        obs_ts = obs_da.rolling(time=nyear,min_periods=nyear, center=True).mean().dropna('time',how='all')
     else:
         obs_ts = obs_da
     lvals = np.arange(nyear)
@@ -307,7 +309,7 @@ def compute_resampskill_annual(mod_da,mod_time,obs_da,nyear=1,nleads=1,detrend=F
         corr_list = []; pval_list = []; rmse_list = []; msss_list = []; rpc_list = []
         sigobs_list = []; sigsig_list = []; sigtot_list = []; s2t_list = []
         for i in range(nleads):
-            ens_ts = mod_da.sel(iteration=l).isel(L=lvals+i).mean('L').rename({'Y':'time'})
+            ens_ts = mod_da.sel(iteration=l).isel(L=lvals+i).mean('L').rename({'Y':'time'}).chunk(dict(time=-1))
             ens_time_year = mod_time.isel(L=lvals+i).mean('L').data
             ens_ts = ens_ts.assign_coords(time=("time",ens_time_year))
             a,b = xr.align(ens_ts,obs_ts)

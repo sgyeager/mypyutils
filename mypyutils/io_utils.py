@@ -30,7 +30,7 @@ def file_dict(filetempl,filetype,mem,stmon):
 def nested_file_list_by_year(filetemplate,filetype,ens,field,startyears,stmon):
     """ retrieves a nested list of files for these start years and ensemble members
     """
-    ens = np.array(range(ens))+1
+    #ens = np.array(range(ens))+1
     yrs = startyears
     files = []    # a list of lists, dim0=start_year, dim1=ens
     filecount = []

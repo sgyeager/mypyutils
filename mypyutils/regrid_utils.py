@@ -56,6 +56,54 @@ def add_grid_bounds(ds):
         ds['lon_b'] = lonb
     return ds
 
+def add_xesmf_bounds(ds):
+    if not 'lon_b' in ds.dims:
+        lon = ds['lon'].load()
+        lat = ds['lat'].load()
+        savelonattrs = lon.attrs
+        savelatattrs = lat.attrs
+        tmp = ds.cf.add_bounds(['lon','lat']).rename({'lat_bounds':'lat_b','lon_bounds':'lon_b'})
+        lonb = tmp['lon_b']
+        latb = tmp['lat_b']
+    
+        dim1 = lonb.dims[0]; dim2 = lonb.dims[1]
+        lonb2 = xr.concat([lonb.isel({dim1:0,dim2:0}),lonb.isel({dim2:1})],dim=dim1).drop('lon').swap_dims({'lon':'lon_b'})
+        if (max(lon.values)<=180):
+            lonb2 = xr.where(lonb2<-180,lonb2+360,lonb2)
+            lonb2 = xr.where(lonb2>180,lonb2-360,lonb2)
+        else:
+            lonb2 = xr.where(lonb2<0,lonb2+360,lonb2)
+            lonb2 = xr.where(lonb2>360,lonb2-360,lonb2)
+        ds['lon_b'] = lonb2.assign_attrs(savelonattrs)
+
+        dim1 = latb.dims[0]; dim2 = latb.dims[1]
+        latb2 = xr.concat([latb.isel({dim1:0,dim2:0}),latb.isel({dim2:1})],dim=dim1).drop('lat').swap_dims({'lat':'lat_b'})
+        latb2 = xr.where(latb2<-90,-90,latb2)
+        latb2 = xr.where(latb2>90,90,latb2)
+        ds['lat_b'] = latb2.assign_attrs(savelatattrs)
+    
+    return ds
+
+def add_grid_bounds_2Dmesh(ds):
+    saveattrs = ds['lon'].attrs
+    ds['lon'] = xr.where(ds['lon']<0,ds['lon']+360,ds['lon'])
+    ds['lon'] = ds['lon'].assign_attrs(saveattrs).load()
+    ds = ds.cf.add_bounds(['lon','lat']).rename({'lat_bounds':'lat_b','lon_bounds':'lon_b'})
+    #  range fix
+    latb = ds['lat_b']
+    if ((latb<-90) | (latb>90)).any():
+        saveattrs = ds['lat'].attrs
+        latb = xr.where(latb>90,90,latb)
+        latb = xr.where(latb<-90,-90,latb)
+        ds['lat_b'] = latb
+        ds['lat'] = ds['lat'].assign_attrs(saveattrs).load()
+    lonb = ds['lon_b']
+    if ((lonb<0) | (lonb>360)).any():
+        lonb = xr.where(lonb<0,lonb+360,lonb)
+        lonb = xr.where(lonb>360,lonb-360,lonb)
+        ds['lon_b'] = lonb
+    return ds
+
 def add_grid_bounds_POP(ds):
     lon = ds.lon; lat = ds.lat
     lonb = ds.lon_b; latb = ds.lat_b
